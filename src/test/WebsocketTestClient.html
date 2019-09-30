@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ADB WebSocket Test Client</title>
+</head>
+<script type="text/javascript">
+	var ws;
+
+    let downloadChunks = [];
+	
+	function openSocket() {
+		// var url = "ws://localhost:8888/websocket";
+		let url = document.getElementById('server_url').value;
+		//writeToScreen("Connecting to: " + url);
+		ws = new WebSocket(url);
+
+		ws.onopen = function(event) {
+			writeReceivedMessage("Connected to: " + url);
+		};
+
+		ws.onclose = function() {
+			writeReceivedMessage("Disconnected.");
+		};
+
+		ws.onmessage = function(event) {
+			if (event.data instanceof Blob) {
+				writeReceivedMessage("Received Binary Data");
+				downloadChunks.push(event.data);
+			} else {
+				let data = JSON.parse(event.data);
+				
+				if(data.messageType == "FILE_PULL" && data.statusCode == 200) {
+					const blob = new Blob(downloadChunks, { type: 'application/octet-stream; charset=utf-8' })
+					const link = document.createElement('a')
+			        link.href = URL.createObjectURL(blob)
+			        link.download = "downloaded_file"
+			        link.click()
+					
+					downloadChunks = [];
+					return;
+				}
+				
+				writeReceivedMessage('Received Text Data: ', event.data);
+			}
+		};
+
+		ws.onerror = function(error) {
+			writeReceivedMessage("Error: " + error.data);
+		};
+	}
+
+	function writeReceivedMessage(log, message) {
+		let m = (message) ? message : '';
+		writeToScreen("Server -> Client: " + log + "<br />" + m)
+	}
+
+	function writeToScreen(message) {
+		var li = document.createElement('li');
+		li.innerHTML = message
+		document.getElementById('messages').appendChild(li);
+	}
+
+	function closeSocket() {
+		ws.close();
+	}
+
+	function sendMessage(websocketMessage) {
+		// let message = document.getElementById('message').value;
+		writeToScreen("Client -> Server: <br />"
+				+ JSON.stringify(websocketMessage))
+		ws.send(JSON.stringify(websocketMessage));
+	}
+
+	function getRequestMessage(messageType) {
+		let serial = document.getElementById('serial').value;
+		let request = {
+			'messageType' : messageType,
+			'deviceSerial' : serial,
+		}
+		return request;
+	}
+
+	function auth() {
+		let authMessage = getRequestMessage("AUTH");
+		sendMessage(authMessage, "Auth with serial: "
+				+ authMessage.deviceSerial);
+	}
+
+	function getSdcard() {
+		let directoryGetRequest = getRequestMessage("DIRECTORY_GET");
+		directoryGetRequest['path'] = "/sdcard";
+		sendMessage(directoryGetRequest);
+	}
+
+	function sendBinary(binMsg, callback) {
+		ws.send(binMsg);
+
+		if (callback != null) {
+			var interval = setInterval(function() {
+				if (ws.bufferedAmount > 0) {
+					callback(ws.bufferedAmount)
+				} else {
+					callback(0)
+					clearInterval(interval);
+				}
+			}, 100);
+		}
+	}
+
+	var pendingFiles = [];
+
+	function selectFile() {
+		var x = document.getElementById("filesToUpload");
+		if (!('files' in x) || x.files.length == 0) {
+			return;
+		}
+
+		for (var i = 0; i < x.files.length; i++) {
+			pendingFiles.push(x.files[i]);
+		}
+		// x.value = null;		
+		console.log(pendingFiles);
+	}
+
+	function sendFile() {
+		let file = pendingFiles[0];
+
+		let filePushRequest = getRequestMessage("FILE_PUSH");
+		filePushRequest['fullPath'] = "/sdcard/Download/" + file.name;
+		filePushRequest['fileName'] = file.name;
+		filePushRequest['size'] = file.size;
+		sendMessage(filePushRequest);
+
+		sendBinary(file, function(bytesNotSent) {
+			if (bytesNotSent == 0) {
+				writeToScreen("Client: File successfully sent");
+				pendingFiles.pop();
+			} else {
+				var loaded = file.size - bytesNotSent;
+				var percentage = Math.round((loaded * 100) / file.size);
+				console.log(percentage);
+			}
+		});
+	}
+
+	function getFile() {
+		let fileGetRequest = getRequestMessage("FILE_PULL");
+		fileGetRequest['fullPath'] = document.getElementById('fileToDownload').value;
+		sendMessage(fileGetRequest);
+	}
+</script>
+<body>
+    <div id="content" style="height: 75%; width: 99%; position: fixed;">
+    <b style="font-size: x-large;">WebSocket Test Client</b>
+
+    <div id="control">
+        <div id="connectionOptions" style="width: 100%; margin: 0 auto;">
+            <div id="connection" style="width: 75%;">
+                <input id="server_url" type="text" value="ws://localhost:8888/adb" size="75">
+                <button onclick="openSocket()">Open Connection</button>
+                <button onclick="closeSocket()">Close Connection</button>
+            </div>
+            <div id="auth" style="width: 75%;">
+                <input id="serial" type="text" value="" size="75">
+                <button onclick="auth()">Auth with serial</button>
+            </div>
+        </div>
+        <div id="directory">
+            <button onclick="getSdcard()">Get /sdcard</button>
+        </div>
+    
+        <div id="ftTransfer">
+            <div id="upload">
+                <input type="file" id="filesToUpload" multiple size="50" onchange="selectFile()">
+                <button onclick="sendFile()">Send File</button>
+            </div>
+            <div id="download">
+                <input id="fileToDownload" type="text" value="/sdcard/Download/SampleJPGImage.jpg" size="100">
+                <button onclick="getFile()">Get File</button>
+            </div>
+        </div>
+    
+
+    </div>
+
+    <div id="messagesDiv" style="overflow: auto; height: 100%; margin-top: 10px;">
+        <ul id="messages"></ul>
+    </div>
+    </div>
+
+</body>
+</html>
