@@ -1,0 +1,6 @@
+#!/bin/bash
+
+## Stop cornerstone-adb-websocket-server service
+/bin/systemctl stop cornerstone-adb-websocket-server
+/bin/systemctl disable cornerstone-adb-websocket-server
+/bin/systemctl daemon-reload

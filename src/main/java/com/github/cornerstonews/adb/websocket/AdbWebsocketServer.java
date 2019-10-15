@@ -26,7 +26,7 @@ public class AdbWebsocketServer {
     private AdbWebsocketServer() {
     }
 
-    public static AdbWebsocketServer getInstance() {
+    static AdbWebsocketServer getInstance() {
         return adbWebsocketServer;
     }
 
@@ -39,26 +39,23 @@ public class AdbWebsocketServer {
     }
 
     private void addShutdownHook() {
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    if (websocketServer != null) {
-                        LOG.debug("Running shutdown hook.");
-                        adbWebsocketServer.shutdown();
-                    }
-                } catch (Exception e) {
-                    LOG.error("Exception stopping Websocket Server", e);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (websocketServer != null) {
+                    LOG.debug("Running shutdown hook.");
+                    adbWebsocketServer.shutdown();
                 }
+            } catch (Exception e) {
+                LOG.error("Exception stopping Websocket Server", e);
             }
         }));
     }
 
-    public AdbManager getAdbManager() {
+    AdbManager getAdbManager() {
         return this.adbManager;
     }
-    
-    public void shutdown() {
+
+    private void shutdown() {
         LOG.info("Shutting down Websocket Server...");
         adbManager.shutdown();
         this.websocketServer.stop();
@@ -74,7 +71,7 @@ public class AdbWebsocketServer {
         String line;
         while ((line = reader.readLine()) != null) {
             if ("stop".equalsIgnoreCase(line.trim().toLowerCase())) {
-                adbWebsocketServer.shutdown();
+                Runtime.getRuntime().exit(0);
                 break;
             }
 //          System.out.print("Please enter 'stop' to shutdown the WebsocketServerService.");
