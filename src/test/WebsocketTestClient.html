@@ -7,8 +7,8 @@
 <script type="text/javascript">
 	var ws;
 
-    let downloadChunks = [];
-	
+	let downloadChunks = [];
+
 	function openSocket() {
 		// var url = "ws://localhost:8888/websocket";
 		let url = document.getElementById('server_url').value;
@@ -29,18 +29,20 @@
 				downloadChunks.push(event.data);
 			} else {
 				let data = JSON.parse(event.data);
-				
-				if(data.messageType == "FILE_PULL" && data.statusCode == 200) {
-					const blob = new Blob(downloadChunks, { type: 'application/octet-stream; charset=utf-8' })
+
+				if (data.messageType == "FILE_PULL" && data.statusCode == 200) {
+					const blob = new Blob(downloadChunks, {
+						type : 'application/octet-stream; charset=utf-8'
+					})
 					const link = document.createElement('a')
-			        link.href = URL.createObjectURL(blob)
-			        link.download = "downloaded_file"
-			        link.click()
-					
+					link.href = URL.createObjectURL(blob)
+					link.download = "downloaded_file"
+					link.click()
+
 					downloadChunks = [];
 					return;
 				}
-				
+
 				writeReceivedMessage('Received Text Data: ', event.data);
 			}
 		};
@@ -149,44 +151,69 @@
 		fileGetRequest['fullPath'] = document.getElementById('fileToDownload').value;
 		sendMessage(fileGetRequest);
 	}
+
+	function shellCommand() {
+		let shellCommandRequest = getRequestMessage("SHELL_COMMAND");
+		shellCommandRequest['shellCommand'] = document
+				.getElementById('shellCommand').value;
+		sendMessage(shellCommandRequest);
+	}
+
+	function getStatus() {
+		let statusCommandRequest = getRequestMessage("STATUS");
+		sendMessage(statusCommandRequest);
+	}
+
+	function rebootPhone() {
+		let rebootRequest = getRequestMessage("REBOOT");
+		sendMessage(rebootRequest);
+	}
 </script>
 <body>
     <div id="content" style="height: 75%; width: 99%; position: fixed;">
-    <b style="font-size: x-large;">WebSocket Test Client</b>
+        <b style="font-size: x-large;">WebSocket Test Client</b>
 
-    <div id="control">
-        <div id="connectionOptions" style="width: 100%; margin: 0 auto;">
-            <div id="connection" style="width: 75%;">
-                <input id="server_url" type="text" value="ws://localhost:8888/adb" size="75">
-                <button onclick="openSocket()">Open Connection</button>
-                <button onclick="closeSocket()">Close Connection</button>
+        <div id="control">
+            <div id="connectionOptions" style="width: 100%; margin: 0 auto;">
+                <div id="connection" style="width: 75%;">
+                    <input id="server_url" type="text" value="ws://localhost:8888/adb" size="75">
+                    <button onclick="openSocket()">Open Connection</button>
+                    <button onclick="closeSocket()">Close Connection</button>
+                </div>
+                <div id="auth" style="width: 75%;">
+                    <input id="serial" type="text" value="" placeholder="Serial number" size="75">
+                    <button onclick="auth()">Auth with serial</button>
+                </div>
             </div>
-            <div id="auth" style="width: 75%;">
-                <input id="serial" type="text" value="" size="75">
-                <button onclick="auth()">Auth with serial</button>
+            <div id="directory">
+                <button onclick="getSdcard()">Get /sdcard</button>
+                <button onclick="getStatus()">Get Status</button>
+                <button onclick="rebootPhone()">Reboot Phone</button>
             </div>
-        </div>
-        <div id="directory">
-            <button onclick="getSdcard()">Get /sdcard</button>
-        </div>
-    
-        <div id="ftTransfer">
-            <div id="upload">
-                <input type="file" id="filesToUpload" multiple size="50" onchange="selectFile()">
-                <button onclick="sendFile()">Send File</button>
-            </div>
-            <div id="download">
-                <input id="fileToDownload" type="text" value="/sdcard/Download/SampleJPGImage.jpg" size="100">
-                <button onclick="getFile()">Get File</button>
-            </div>
-        </div>
-    
 
-    </div>
+            <div id="ftTransfer">
+                <div id="upload">
+                    <input type="file" id="filesToUpload" multiple size="50" onchange="selectFile()">
+                    <button onclick="sendFile()">Send File</button>
+                </div>
+                <div id="download">
+                    <input id="fileToDownload" type="text" value="" placeholder="/sdcard/Download/SampleJPGImage.jpg" size="100">
+                    <button onclick="getFile()">Get File</button>
+                </div>
+            </div>
 
-    <div id="messagesDiv" style="overflow: auto; height: 100%; margin-top: 10px;">
-        <ul id="messages"></ul>
-    </div>
+            <div id="adbShellCommand">
+                <div id="shellCommandDiv" style="width: 75%;">
+                    <input id="shellCommand" type="text" value="" placeholder="Adb Shell Command" size="75">
+                    <button onclick="shellCommand()">Run Command</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="messagesDiv" style="overflow: auto; height: 100%; margin-top: 10px;">
+            <ul id="messages"></ul>
+        </div>
     </div>
 
 </body>
