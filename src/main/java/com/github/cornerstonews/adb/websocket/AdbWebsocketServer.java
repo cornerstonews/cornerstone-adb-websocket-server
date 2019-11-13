@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.Map;
 
 import javax.websocket.DeploymentException;
 
@@ -34,7 +35,9 @@ public class AdbWebsocketServer {
         LOG.info("Starting Websocket Server.");
         this.addShutdownHook();
         this.adbManager = new AdbManager("/Applications/adb/platform-tools_r29.0.1");
-        this.websocketServer = new WebsocketServer("localhost", 8888, "/", new HashMap<String, Object>(), AdbWebsocketEndpoint.class);
+        Map<String,Object> properties = new HashMap<String, Object>();
+//        properties.put("org.glassfish.tyrus.incomingBufferSize", 200000000);
+        this.websocketServer = new WebsocketServer("localhost", 8888, "/", properties, AdbWebsocketEndpoint.class);
         this.websocketServer.start();
     }
 
@@ -61,20 +64,32 @@ public class AdbWebsocketServer {
         this.websocketServer.stop();
     }
 
-    public static void main(String[] args) throws DeploymentException, IOException {
-        AdbWebsocketServer adbWebsocketServer = AdbWebsocketServer.getInstance();
-        adbWebsocketServer.start();
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-//      System.out.print("Please enter 'stop' to shutdown the WebsocketServerService.");
-
-        String line;
-        while ((line = reader.readLine()) != null) {
-            if ("stop".equalsIgnoreCase(line.trim().toLowerCase())) {
-                Runtime.getRuntime().exit(0);
-                break;
+    public static void main(String[] args) {
+        AdbWebsocketServer adbWebsocketServer;
+        try {
+            adbWebsocketServer = AdbWebsocketServer.getInstance();
+            adbWebsocketServer.start();
+    
+            // Prevent server from shutting down until we get SIGTERM
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+            String line;
+            if ((line = reader.readLine()) != null) {
+                System.out.print("Please enter 'stop' to shutdown the WebsocketServerService.");
+    
+                while ((line = reader.readLine()) != null) {
+                    if ("stop".equalsIgnoreCase(line.trim().toLowerCase())) {
+                        Runtime.getRuntime().exit(0);
+                        break;
+                    }
+                    System.out.print("Please enter 'stop' to shutdown the WebsocketServerService.");
+                }
+            } else {
+                Thread.currentThread().join();
             }
-//          System.out.print("Please enter 'stop' to shutdown the WebsocketServerService.");
+        } catch (DeploymentException | IOException | InterruptedException e) {
+            LOG.error("Error caught in AdbWebsocketServer Main(). Server will shutdown.", e.getMessage());
+            LOG.error(e);
+            Runtime.getRuntime().exit(1);
         }
     }
 }
