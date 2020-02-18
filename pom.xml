@@ -22,6 +22,14 @@
         <tag>HEAD</tag>
     </scm>
 
+    <repositories>
+        <repository>
+            <id>google-android</id>
+            <name>Google’s Android</name>
+            <url>https://maven.google.com</url>
+        </repository>
+    </repositories>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
