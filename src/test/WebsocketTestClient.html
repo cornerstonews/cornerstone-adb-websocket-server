@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ADB WebSocket Test Client</title>
+<style type="text/css">
+body {
+    margin: 0;
+    background-color: #eee;
+}
+
+.header {
+    color: #4aaadf;
+    font-size: 32px;
+    margin-left: 1em;
+    line-height: 2em;
+}
+
+.header-container {
+    background: #132b3c;
+}
+
+.content {
+    height: calc(100% - 65px);
+    margin: 1em 2em;
+}
+
+.description {
+    font-size: larger;
+}
+
+div.labels {
+    float: left;
+    min-width: 150px;
+    line-height: 1em;
+    /* text-align: right; */
+    padding-right: 10px;
+}
+
+div.fields {
+    float: left;
+    line-height: 1em;
+}
+
+div.row {
+    margin-top: 10px;
+    position: relative;
+}
+
+.displayfix:before, .displayfix:after {
+    content: " ";
+    display: table;
+}
+
+.displayfix:after {
+    clear: both;
+}
+
+.displayfix {
+    *zoom: 1;
+}
+
+.input-file {
+    width: 387px;
+}
+
+.messages-div {
+    margin-top: 20px;
+}
+
+.messages-log {
+    overflow-y: scroll;
+    width: 100%;
+    height: calc(100vh - 415px);
+    border: solid 1px #aaaaaa;
+    background-color: #ffffff;
+    padding-left: 5px;
+}
+
+pre {
+    white-space: pre;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.clear-button {
+    margin-left: 15px;
+    margin-bottom: 2px;
+}
+
+</style>
+<script type="text/javascript">
+	let ws;
+
+    let fileDownloader = null;
+	    
+    class FileDownloader {
+        constructor(fileInfo) {
+            this.fileInfo = fileInfo;
+            this.downloadedChunks = [];
+            this.progress = null;
+            this.downloadedSize = 0;
+        }
+
+        handleChunks(blobChunk) {
+        	this.downloadedChunks.push(blobChunk);
+        	this.downloadedSize += blobChunk.size;
+        	this.logProgress();
+        }
+        
+        logProgress() {
+        	const progressMessage = "<span style='color:green'>Client | Total downloaded size: " + (this.downloadedSize/1000000.0) + " MB</span>"
+        	if(this.progress) {
+        		this.progress.innerHTML = progressMessage;
+        	} else {
+                this.progress = writeToScreen(progressMessage);    		
+        	}
+        }
+        
+        saveFile() {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob(this.downloadedChunks, {
+                type : 'application/octet-stream; charset=utf-8'
+            }));
+            link.download = this.fileInfo['fullPath'].replace(/^.*[\\\/]/, '');
+            link.click()
+        }
+        
+        handleMessage(data) {
+            if(data.statusCode == 200) {
+                this.saveFile();
+                writeReceivedMessage('Received File complete message.', JSON.stringify(data));
+                fileDownloader = null;
+            } else if(data.statusCode == 201) {
+                this.fileInfo = data;
+                writeReceivedMessage('Received Text Data: ', JSON.stringify(data));
+            }
+        }
+    }
+	
+	function openSocket() {	
+		// var url = "ws://localhost:8888/websocket";
+		let url = document.getElementById('server_url').value;
+		writeToScreen("Client -> Server | Connecting to: " + url);
+		ws = new WebSocket(url);
+
+		ws.onopen = function(event) {
+			writeReceivedMessage("Connected.");
+		};
+
+		ws.onclose = function() {
+			writeReceivedMessage("Disconnected.");
+		};
+
+		ws.onmessage = function(event) {
+			if (event.data instanceof Blob) {
+				// writeReceivedMessage("Received Binary Data");
+				if(!fileDownloader) {
+					writeToScreen("<span style='color:red'>Client | Unsolicited file transfer.</span>");
+					return;
+				}			
+                fileDownloader.handleChunks(event.data);
+			} else {
+				let data = JSON.parse(event.data);
+
+				if (data.messageType == "FILE_PULL") {
+					if(!fileDownloader) {
+                        writeToScreen("<span style='color:red'>Client | Unsolicited file transfer.</span>");
+                        return;
+                    }
+					fileDownloader.handleMessage(data);
+					return;
+				}
+
+				writeReceivedMessage('Received Text Data: ', event.data);
+			}
+		};
+
+		ws.onerror = function(error) {
+			writeErrorMessage(error.data);
+		};
+	}
+	
+	function writeErrorMessage(message) {
+		writeToScreen("<span style='color:red'>Server -> Client | Error: <br />" + message + "</span>");
+	}
+
+	function writeReceivedMessage(log, message) {
+		const m = (message) ? message : '';
+		if(message && JSON.parse(message)["statusCode"] >= 400) {
+	        writeToScreen("<span style='color:red'>Server -> Client | Error: <br />" + m + "</span>");			
+		} else {
+	        writeToScreen("<span style='color:blue'>Server -> Client | " + log + "<br />" + m + "</span>");			
+		}
+	}
+
+	function writeToScreen(message) {	
+		logDiv = document.getElementById('messagesLog');
+		
+	    var pre = document.createElement("pre");
+        pre.style.wordWrap = "break-word";
+        pre.innerHTML = message;
+        logDiv.appendChild(pre);
+        logDiv.scrollTop = logDiv.scrollHeight;
+        /*
+        while (logDiv.childNodes.length > 25) {
+        	logDiv.removeChild(consoleLog.firstChild);
+        }
+        */
+        
+        return pre;
+	}
+	
+	function clearLogs() {
+		logDiv = document.getElementById('messagesLog');
+	    while (logDiv.childNodes.length > 0) {
+	    	logDiv.removeChild(logDiv.lastChild);
+        }
+	}
+
+	function closeSocket() {
+		writeToScreen("Client -> Server | Disconnecting...");
+		ws.close();
+	}
+
+	function sendMessage(log, websocketMessage) {
+		writeToScreen("Client -> Server | " + log + "<br />" + JSON.stringify(websocketMessage))
+		ws.send(JSON.stringify(websocketMessage));
+	}
+
+	function getRequestMessage(messageType) {
+		const serial = document.getElementById('serial').value;
+		const request = {
+			'messageType' : messageType,
+			'deviceSerial' : serial,
+		}
+		return request;
+	}
+
+	function auth() {
+		const authMessage = getRequestMessage("AUTH");
+		sendMessage("Auth with serial: " + authMessage.deviceSerial, authMessage);
+	}
+
+	function getSdcard(getChildren) {
+		const directoryGetRequest = getRequestMessage("DIRECTORY_GET");
+		directoryGetRequest['path'] = "/sdcard";
+		directoryGetRequest['getChildren'] = getChildren;
+		sendMessage("Get /sdcard" + ((getChildren) ? " with children" : ""), directoryGetRequest);
+	}
+
+	function getPath() {
+		const directoryGetRequest = getRequestMessage("DIRECTORY_GET");
+		const path = document.getElementById('path').value;
+		directoryGetRequest['path'] = path;
+		sendMessage("Get directory path: " + path, directoryGetRequest);
+	}
+	
+	/*
+    function sendBinary(binMsg, callback) {
+        ws.send(binMsg);
+        
+        if (callback != null) {
+            var interval = setInterval(function() {
+                if (ws.bufferedAmount > 0) {
+                    callback(ws.bufferedAmount)
+                } else {
+                    callback(0)
+                    clearInterval(interval);
+                }
+            }, 100);
+        }
+    }
+	*/
+
+   function sendBinary(blob, callback) {	
+		// 64KB chunk sizes.
+        const BYTES_PER_CHUNK = 1024 * 64;
+        let callbackInterval = null;
+        
+        let index = 0;
+        let bytesLeft;        
+        while ((bytesLeft = (blob.size - index)) > 0) {
+        	const size = Math.min(BYTES_PER_CHUNK, bytesLeft);
+        	
+            let chunk;
+            if ('mozSlice' in blob) {
+                chunk = blob.mozSlice(index, (index + size));
+            } else if ('slice' in blob) {
+                chunk = blob.slice(index, (index + size));
+            } else {
+                chunk = blob.webkitSlice(index, (index + size));
+            }
+
+            ws.send(chunk);
+            index += size;
+            
+            if (callback != null && callbackInterval == null) {
+            	callbackInterval = setInterval(function() {
+                    if (ws.bufferedAmount > 0) {
+                        callback(ws.bufferedAmount)
+                    } else {
+                        callback(0)
+                        clearInterval(callbackInterval);
+                    }
+                }, 100);
+            }
+        }
+    }
+
+	var pendingFiles = [];
+
+	function selectFile() {
+		let x = document.getElementById("filesToUpload");
+		if (!('files' in x) || x.files.length == 0) {
+			return;
+		}
+
+		for (var i = 0; i < x.files.length; i++) {
+			pendingFiles.push(x.files[i]);
+		}
+		// x.value = null;      
+		console.log(pendingFiles);
+	}
+
+	function sendFile() {
+		const file = pendingFiles[0];
+	    
+		const filePushRequest = getRequestMessage("FILE_PUSH");
+		filePushRequest['fullPath'] = "/sdcard/Download/" + file.name;
+		filePushRequest['fileName'] = file.name;
+		filePushRequest['size'] = file.size;
+		sendMessage("Send file to phone. File: " + file.name, filePushRequest);
+
+		let progress;
+		sendBinary(file, function(bytesNotSent) {
+			if (bytesNotSent <= 0) {
+				const progressMessage = "<span style='color:green'>Client | Total uploaded size: " + (file.size/1000000.0) + " MB, 100%</span>";
+				progress.innerHTML = progressMessage;
+				writeToScreen("Client: File successfully sent");
+				pendingFiles.pop();
+			} else {
+                const loaded = file.size - bytesNotSent;
+                const percentage = Math.round((loaded * 100) / file.size);
+                //console.log(percentage);			
+			    const progressMessage = "<span style='color:green'>Client | Total uploaded size: " + (loaded/1000000.0) + " MB, " + percentage + "%</span>"
+	            if(progress) {
+	                progress.innerHTML = progressMessage;
+	            } else {
+	                progress = writeToScreen(progressMessage);         
+	            }
+
+			}
+		});
+	}
+
+	function getFile() {
+		const fileGetRequest = getRequestMessage("FILE_PULL");
+		const filePath = document.getElementById('fileToDownload').value;
+		fileGetRequest['fullPath'] = filePath;
+		fileDownloader = new FileDownloader(fileGetRequest);
+		sendMessage("Get file from phone. Path: " + filePath, fileGetRequest);
+	}
+
+	function shellCommand() {
+		const shellCommandRequest = getRequestMessage("SHELL_COMMAND");
+		const command = document.getElementById('shellCommand').value;
+		shellCommandRequest['shellCommand'] = command;
+		sendMessage("Command: " + command, shellCommandRequest);
+	}
+
+	function getStatus() {
+		const statusCommandRequest = getRequestMessage("STATUS");
+		sendMessage("Get Status", statusCommandRequest);
+	}
+
+	function rebootPhone() {
+		const rebootRequest = getRequestMessage("REBOOT");
+		sendMessage("Reboot phone.", rebootRequest);
+	}
+</script>
+</head>
+<body>
+    <div class="header-container">
+        <header class="wrapper clearfix">
+            <div class="header">ADB WebSocket Test Client</div>
+        </header>
+    </div>
+
+    <div id="content" class="content">
+        <p class="description">Test Android Debug Bridge (adb) calls over WebSocket.
+        <div id="control">
+            <div id="connection-div" class="row displayfix">
+                <div class="labels">
+                    <label>Server Address</label>
+                </div>
+                <div id="connection" class="fields">
+                    <input id="server_url" type="text" value="ws://localhost:8888/adb" size="75">
+                    <button onclick="openSocket()">Open Connection</button>
+                    <button onclick="closeSocket()">Close Connection</button>
+                </div>
+            </div>
+            <div id="auth-div" class="row displayfix">
+                <div class="labels">
+                    <label>Device Authentication</label>
+                </div>
+                <div id="connection" class="fields">
+                    <input id="serial" type="text" value="" placeholder="Serial number" size="75">
+                    <button onclick="auth()">Auth with serial</button>
+                </div>
+            </div>
+
+            <div id="directory" class="row displayfix">
+                <div class="labels">
+                    <label>Directory Operations</label>
+                </div>
+                <div id="connection" class="fields">
+                    <input id="path" type="text" value="/sdcard/Download" placeholder="Directory full path on phone" size="75">
+                    <button onclick="getPath()">Get Path</button>
+                    <div>
+                    <button onclick="getSdcard(false)">Get /sdcard</button>
+                    <button onclick="getSdcard(true)">Get /sdcard with children</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="adbShellCommand" class="row displayfix">
+                <div class="labels">
+                    <label>Shell Command</label>
+                </div>
+                <div id="shellCommandDiv">
+                    <input id="shellCommand" type="text" value="dumpsys telephony.registry" placeholder="Adb Shell Command" size="75">
+                    <button onclick="shellCommand()">Run Command</button>
+                </div>
+            </div> 
+
+            <div id="ftTransferUpload" class="row displayfix">
+                <div class="labels">
+                    <label>Upload File</label>
+                </div>
+                <div id="upload">
+                    <input type="file" class="input-file" id="filesToUpload" multiple size="75" onchange="selectFile()">
+                    <button onclick="sendFile()">Upload</button>
+                </div>
+            </div>
+            <div id="ftTransferDownload" class="row displayfix">
+                <div class="labels">
+                    <label>Download File</label>
+                </div>
+                <div id="download">
+                    <input id="fileToDownload" type="text" value="" placeholder="/sdcard/Download/SampleJPGImage_30mb.jpg" size="75">
+                    <button onclick="getFile()">Download</button>
+                </div>
+            </div>
+            
+            <div id="status" class="row displayfix">
+                <div class="labels">
+                    <label>Status</label>
+                </div>
+                <div id="status-buttons">
+                    <button onclick="getStatus()">Get Status</button>
+                    <button onclick="rebootPhone()">Reboot Phone</button>
+                </div>
+            </div>
+
+            <!-- <div id="connectionOptions" style="width: 100%; margin: 0 auto; padding-bottom: 10px;">
+                <div id="connection" style="width: 75%;">
+                    <input id="server_url" type="text" value="ws://localhost:8888/adb" size="75">
+                    <button onclick="openSocket()">Open Connection</button>
+                    <button onclick="closeSocket()">Close Connection</button>
+                </div>
+                <div id="auth" style="width: 75%;">
+                    <input id="serial" type="text" value="" placeholder="Serial number" size="75">
+                    <button onclick="auth()">Auth with serial</button>
+                </div>
+            </div> -->
+            <!-- <div id="directory" style="padding-bottom: 10px;">
+                <button onclick="getSdcard(false)">Get /sdcard</button>
+                <button onclick="getSdcard(true)">Get /sdcard and get children</button>
+                <div id="directoryPath" style="width: 75%;">
+                    <input id="path" type="text" value="" placeholder="Path on phone" size="75">
+                    <button onclick="getPath()">Get Path</button>
+                </div>
+            </div>
+            <div id="status" style="padding-bottom: 10px;">
+                <button onclick="getStatus()">Get Status</button>
+                <button onclick="rebootPhone()">Reboot Phone</button>
+            </div>
+            <div id="ftTransfer" style="padding-bottom: 10px;">
+                <div id="upload">
+                    <input type="file" id="filesToUpload" multiple size="50" onchange="selectFile()">
+                    <button onclick="sendFile()">Send File</button>
+                </div>
+                <div id="download" style="padding-bottom: 10px;">
+                    <input id="fileToDownload" type="text" value="" placeholder="/sdcard/Download/SampleJPGImage.jpg"
+                        size="100">
+                    <button onclick="getFile()">Get File</button>
+                </div>
+            </div>
+
+            <div id="adbShellCommand" style="padding-bottom: 10px;">
+                <div id="shellCommandDiv" style="width: 75%;">
+                    <input id="shellCommand" type="text" value="" placeholder="Adb Shell Command" size="75">
+                    <button onclick="shellCommand()">Run Command</button>
+                </div>
+            </div> -->
+
+            <div id="messagesDiv" class="messages-div">
+                Logs
+                <button id="clear" class="clear-button" onClick="clearLogs()">Clear Log</button>
+                <div id="messagesLog" class="messages-log"></div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
