@@ -37,7 +37,7 @@ public class AdbWebsocketServer {
         this.adbManager = new AdbManager("/Applications/adb/platform-tools_r29.0.1");
         Map<String,Object> properties = new HashMap<String, Object>();
 //        properties.put("org.glassfish.tyrus.incomingBufferSize", 200000000);
-        this.websocketServer = new WebsocketServer("localhost", 8888, "/", properties, AdbWebsocketEndpoint.class);
+        this.websocketServer = new WebsocketServer("localhost", 8888, null, "/", properties, AdbWebsocketEndpoint.class);
         this.websocketServer.start();
     }
 
