@@ -34,10 +34,10 @@ public class AdbWebsocketServer {
     public void start() throws DeploymentException, FileNotFoundException {
         LOG.info("Starting Websocket Server.");
         this.addShutdownHook();
-        this.adbManager = new AdbManager("/Applications/adb/platform-tools_r29.0.1");
+        this.adbManager = new AdbManager("/Applications/adb/platform-tools_r29.0.6");
         Map<String,Object> properties = new HashMap<String, Object>();
 //        properties.put("org.glassfish.tyrus.incomingBufferSize", 200000000);
-        this.websocketServer = new WebsocketServer("localhost", 8888, null, "/", properties, AdbWebsocketEndpoint.class);
+        this.websocketServer = new WebsocketServer("localhost", 8888, null, "/", properties, AdbWebsocketEndpoint.class, AdminAdbWebsocketEndpoint.class);
         this.websocketServer.start();
     }
 
