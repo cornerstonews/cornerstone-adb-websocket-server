@@ -137,9 +137,18 @@ pre {
             }
         }
     }
+    
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+   	}
 	
-	function openSocket() {	
+    async function openSocket() {	
 		// var url = "ws://localhost:8888/websocket";
+		if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+			closeSocket();
+			await sleep(500);
+		}
+		
 		let url = document.getElementById('server_url').value;
 		writeToScreen("Client -> Server | Connecting to: " + url);
 		ws = new WebSocket(url);
@@ -354,6 +363,13 @@ pre {
 		});
 	}
 
+	function getDevices() {
+        const getDevicesRequest = {
+            'messageType' : "DEVICES_GET"
+        }
+        sendMessage("Get Devices: ", getDevicesRequest);
+	}
+	
 	function getFile() {
 		const fileGetRequest = getRequestMessage("FILE_PULL");
 		const filePath = document.getElementById('fileToDownload').value;
@@ -398,6 +414,14 @@ pre {
                     <input id="server_url" type="text" value="ws://localhost:8888/adb" size="75">
                     <button onclick="openSocket()">Open Connection</button>
                     <button onclick="closeSocket()">Close Connection</button>
+                </div>
+            </div>
+            <div id="device-list-div" class="row displayfix">
+                <div class="labels">
+                    <label>Devices</label>
+                </div>
+                <div id="device-list" class="fields">
+                    <button onclick="getDevices()">Get Devices (Admin Only)</button>
                 </div>
             </div>
             <div id="auth-div" class="row displayfix">
