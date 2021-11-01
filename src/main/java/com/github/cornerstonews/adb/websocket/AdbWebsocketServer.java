@@ -13,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.github.cornerstonews.adb.AdbManager;
+import com.github.cornerstonews.adb.CornerstoneADBException;
 import com.github.cornerstonews.websocket.WebsocketServer;
 
 public class AdbWebsocketServer {
@@ -31,7 +32,7 @@ public class AdbWebsocketServer {
         return adbWebsocketServer;
     }
 
-    public void start() throws DeploymentException, FileNotFoundException {
+    public void start() throws DeploymentException, FileNotFoundException, CornerstoneADBException {
         LOG.info("Starting Websocket Server.");
         this.addShutdownHook();
         this.adbManager = new AdbManager("/Applications/adb/platform-tools_r29.0.6");
@@ -86,7 +87,7 @@ public class AdbWebsocketServer {
             } else {
                 Thread.currentThread().join();
             }
-        } catch (DeploymentException | IOException | InterruptedException e) {
+        } catch (DeploymentException | IOException | InterruptedException | CornerstoneADBException e) {
             LOG.error("Error caught in AdbWebsocketServer Main(). Server will shutdown.", e.getMessage());
             LOG.error(e);
             Runtime.getRuntime().exit(1);
